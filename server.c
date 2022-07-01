@@ -2,12 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <unistd.h> /* */
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <limits.h>
-#include <pthread.h>
+#include <pthread.h> /* importing the thread library*/
 #include "myqueue.h"
 #include "myqueue.c"
 
@@ -18,6 +18,7 @@
 #define THREAD_POOL_SIZE 12
 
 pthread_t thread_pool[THREAD_POOL_SIZE];
+pthread_mutex_t  mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct sockaddr_in SA_IN;
 typedef struct sockaddr SA;
@@ -57,11 +58,6 @@ int main(int argc, char **argv)
         check(client_socket = accept(server_socket, (SA*)&client_addr, (socklen_t*)&addr_size), "accept failed");
         printf("Connected!\n");
 
-        // do whatever we do with connections
-        //int *client_socket = malloc(sizeof(int));
-        //*client_socket = *((int*)client_socket);
-
-        ///handle_connection(client_socket);
 
         // put the connection somewhere so that an available thread
         //can find it
@@ -69,7 +65,9 @@ int main(int argc, char **argv)
 
         int *pclient = malloc(sizeof(int));
         *pclient = client_socket;
+        pthread_mutex_lock(&mutex);
         enqueue(pclient);
+        pthread_mutex_unlock(&mutex);
         //pthread_create(&t, NULL, handle_connection, pclient);
         //handle_connection(pclient);
 
@@ -88,7 +86,10 @@ int check(int exp, const char *msg){
 
 void * thread_function(void *arg){
     while(true){
-        int *pclient = dequeue();
+        int *pclient;
+        pthread_mutex_lock(&mutex);
+        pclient = dequeue();
+        pthread_mutex_unlock(&mutex);
         if (pclient != NULL) {
             // we have a connection
             handle_connection(pclient);
