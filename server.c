@@ -1,3 +1,4 @@
+// a new thread for every connection
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,21 +7,23 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <pthread.h>
 
 #define SERVERPORT 8989
 #define BUFSIZE 4096
 #define SOCKETERROR (-1)
-#define SERVER_BACKLOG 1
+#define SERVER_BACKLOG 100
 
 typedef struct sockaddr_in SA_IN;
 typedef struct sockaddr SA;
 
-void handle_connection(int client_socket);
+void * handle_connection(void* p_client_socket);
 int check(int exp, const char *msg);
 
 int main(int argc, char **argv)
 {
-    int server_socket, client_socket, addr_size;
+    int server_socket, addr_size;
+    int client_socket;
     SA_IN server_addr, client_addr;
 
     check((server_socket = socket(AF_INET, SOCK_STREAM, 0)), "Failed to create socket");
@@ -32,7 +35,7 @@ int main(int argc, char **argv)
     server_addr.sin_port = htons(SERVERPORT);
 
     check(bind(server_socket, (SA*)&server_addr, sizeof(server_addr)), "Bind failed!");
-    check(listen(server_socket, SERVER_BACKLOG), "Kisten failed!");
+    check(listen(server_socket, SERVER_BACKLOG), "Listen failed!");
 
     while(true){
 
@@ -43,7 +46,15 @@ int main(int argc, char **argv)
         printf("Connected!\n");
 
         // do whatever we do with connections
-        handle_connection(client_socket);
+        //int *client_socket = malloc(sizeof(int));
+        //*client_socket = *((int*)client_socket);
+
+        ///handle_connection(client_socket);
+        pthread_t t;
+        int *pclient = malloc(sizeof(int));
+        *pclient = client_socket;
+        pthread_create(&t, NULL, handle_connection, pclient);
+        //handle_connection(pclient);
 
     }//while
 
@@ -58,7 +69,9 @@ int check(int exp, const char *msg){
     return exp;
 }
 
-void handle_connection(int client_socket){
+void * handle_connection(void* p_client_socket){
+    int client_socket = *((int*)p_client_socket);
+    free(p_client_socket); // we really don't need this anymore
     char buffer[BUFSIZE];
     size_t bytes_read;
     int msgsize = 0;
@@ -79,7 +92,7 @@ void handle_connection(int client_socket){
     if (realpath(buffer, actualpath) == NULL){
         printf("ERROR(bad path): %s\n",buffer);
         close(client_socket);
-        return;
+        return NULL;
     }
 
     //read file and send its contents to client
@@ -87,8 +100,9 @@ void handle_connection(int client_socket){
     if (fp == NULL){
         printf("ERROR(open): %s\n",buffer);
         close(client_socket);
-        return;
+        return NULL;
     }
+    sleep(1); // just do nothing
 
     // read file contents and send them to client
     // note this is a fine example program, but rather insecure
@@ -100,4 +114,5 @@ void handle_connection(int client_socket){
     close(client_socket);
     fclose(fp);
     printf("closing connection\n");
+    return NULL;
 }
